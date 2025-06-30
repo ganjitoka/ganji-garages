@@ -28,7 +28,7 @@ local VehicleCategory = {
     sea = {14},
 }
 
----@param category VehicleType
+---@param category GarageVehicleType
 ---@param vehicle number
 ---@return boolean
 local function isOfType(category, vehicle)
@@ -131,7 +131,7 @@ local function displayVehicleInfo(vehicle, garageName, garageInfo, accessPoint)
         }
     }
 
-    if vehicle.state == VehicleState.OUT then
+    if vehicle.state == GarageVehicleState.OUT then
         if garageInfo.type == GarageType.DEPOT then
             options[#options + 1] = {
                 title = 'Take out',
@@ -145,11 +145,11 @@ local function displayVehicleInfo(vehicle, garageName, garageInfo, accessPoint)
         else
             options[#options + 1] = {
                 title = 'Your vehicle is already out...',
-                icon = VehicleType.CAR,
+                icon = GarageVehicleType.CAR,
                 readOnly = true,
             }
         end
-    elseif vehicle.state == VehicleState.GARAGED then
+    elseif vehicle.state == GarageVehicleState.GARAGED then
         options[#options + 1] = {
             title = locale('menu.take_out'),
             icon = 'car-rear',
@@ -158,7 +158,7 @@ local function displayVehicleInfo(vehicle, garageName, garageInfo, accessPoint)
                 takeOutOfGarage(vehicle.id, garageName, accessPoint)
             end,
         }
-    elseif vehicle.state == VehicleState.IMPOUNDED then
+    elseif vehicle.state == GarageVehicleState.IMPOUNDED then
         options[#options + 1] = {
             title = locale('menu.veh_impounded'),
             icon = 'building-shield',
@@ -244,7 +244,7 @@ local function checkCanAccess(garage)
         exports.qbx_core:Notify(locale('error.no_access'), 'error')
         return false
     end
-    if cache.vehicle and not isOfType(garage.vehicleType, cache.vehicle) then
+    if cache.vehicle and not isOfType(garage.garageVehicleType, cache.vehicle) then
         exports.qbx_core:Notify(locale('error.not_correct_type'), 'error')
         return false
     end
@@ -269,7 +269,7 @@ local function createZones(garageName, garage, accessPoint, accessPointIndex)
                         radius = 1.5,
                         onEnter = function()
                             if not cache.vehicle then return end
-                            lib.showTextUI(locale('info.park_e'))
+                            lib.showTextUI(locale('info.park_e') or "")
                         end,
                         onExit = function()
                             lib.hideTextUI()
@@ -289,7 +289,7 @@ local function createZones(garageName, garage, accessPoint, accessPointIndex)
                     radius = 1,
                     onEnter = function()
                         if accessPoint.dropPoint and cache.vehicle then return end
-                        lib.showTextUI((garage.type == GarageType.DEPOT and locale('info.impound_e')) or (cache.vehicle and locale('info.park_e')) or locale('info.car_e'))
+                        lib.showTextUI((garage.type == GarageType.DEPOT and (locale('info.impound_e') or "")) or (cache.vehicle and (locale('info.park_e') or "")) or (locale('info.car_e') or ""))
                     end,
                     onExit = function()
                         lib.hideTextUI()

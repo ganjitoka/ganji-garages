@@ -2,16 +2,16 @@ assert(lib.checkDependency('qbx_core', '1.19.0', true))
 assert(lib.checkDependency('qbx_vehicles', '1.3.1', true))
 lib.versionCheck('Qbox-project/qbx_garages')
 
----@class ErrorResult
+---@class GarageErrorResult
 ---@field code string
 ---@field message string
 
----@class PlayerVehicle
+---@class GaragePlayerVehicle
 ---@field id number
 ---@field citizenid? string
 ---@field modelName string
 ---@field garage string
----@field state VehicleState
+---@field state GarageVehicleState
 ---@field depotPrice integer
 ---@field props table ox_lib properties table
 
@@ -45,7 +45,7 @@ exports('RegisterGarage', registerGarage)
 ---Sets the vehicle's garage. It is the caller's responsibility to make sure the vehicle is not currently spawned in the world, or else this may have no effect.
 ---@param vehicleId integer
 ---@param garageName string
----@return boolean success, ErrorResult?
+---@return boolean success, GarageErrorResult?
 local function setVehicleGarage(vehicleId, garageName)
     local garage = Garages[garageName]
     if not garage then
@@ -55,7 +55,7 @@ local function setVehicleGarage(vehicleId, garageName)
         }
     end
 
-    local state = garage.type == GarageType.DEPOT and VehicleState.IMPOUNDED or VehicleState.GARAGED
+    local state = garage.type == GarageType.DEPOT and GarageVehicleState.IMPOUNDED or GarageVehicleState.GARAGED
     local numRowsAffected = Storage.setVehicleGarage(vehicleId, garageName, state)
     if numRowsAffected == 0 then
         return false, {
@@ -100,20 +100,20 @@ function GetGarageType(garage)
     return Garages[garage]?.type
 end
 
----@class PlayerVehiclesFilters
+---@class GaragePlayerVehiclesFilters
 ---@field citizenid? string
----@field states? VehicleState|VehicleState[]
+---@field states? GarageVehicleState|GarageVehicleState[]
 ---@field garage? string
 
 ---@param source number
 ---@param garageName string
----@return PlayerVehiclesFilters
+---@return GaragePlayerVehiclesFilters
 function GetPlayerVehicleFilter(source, garageName)
     local player = exports.qbx_core:GetPlayer(source)
     local garage = Garages[garageName]
     local filter = {}
     filter.citizenid = not garage.shared and player.PlayerData.citizenid or nil
-    filter.states = garage.states or VehicleState.GARAGED
+    filter.states = garage.states or GarageVehicleState.GARAGED
     filter.garage = not garage.skipGarageCheck and garageName or nil
     return filter
 end
@@ -129,14 +129,14 @@ local function getCanAccessGarage(player, garage)
 end
 
 ---@param playerVehicle PlayerVehicle
----@return VehicleType
+---@return GarageVehicleType
 local function getVehicleType(playerVehicle)
     if VEHICLES[playerVehicle.modelName].category == 'helicopters' or VEHICLES[playerVehicle.modelName].category == 'planes' then
-        return VehicleType.AIR
+        return GarageVehicleType.AIR
     elseif VEHICLES[playerVehicle.modelName].category == 'boats' then
-        return VehicleType.SEA
+        return GarageVehicleType.SEA
     else
-        return VehicleType.CAR
+        return GarageVehicleType.CAR
     end
 end
 
@@ -153,7 +153,7 @@ lib.callback.register('qbx_garages:server:getGarageVehicles', function(source, g
     if not playerVehicles[1] then return end
     for _, vehicle in pairs(playerVehicles) do
         if not FindPlateOnServer(vehicle.props.plate) then
-            local vehicleType = Garages[garageName].vehicleType
+            local vehicleType = Garages[garageName].garageVehicleType
             if vehicleType == getVehicleType(vehicle) then
                 toSend[#toSend + 1] = vehicle
             end
@@ -178,7 +178,7 @@ local function isParkable(source, vehicleId, garageName)
     end
     ---@type PlayerVehicle
     local playerVehicle = exports.qbx_vehicles:GetPlayerVehicle(vehicleId)
-    if getVehicleType(playerVehicle) ~= garage.vehicleType then
+    if getVehicleType(playerVehicle) ~= garage.garageVehicleType then
         return false
     end
     if not garage.shared then
@@ -211,7 +211,7 @@ lib.callback.register('qbx_garages:server:parkVehicle', function(source, netId, 
 
     exports.qbx_vehicles:SaveVehicle(vehicle, {
         garage = garage,
-        state = VehicleState.GARAGED,
+        state = GarageVehicleState.GARAGED,
         props = props
     })
 

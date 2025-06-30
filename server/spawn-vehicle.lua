@@ -3,7 +3,7 @@
 local function setVehicleStateToOut(vehicleId, vehicle, modelName)
     local depotPrice = Config.calculateImpoundFee(vehicleId, modelName) or 0
     exports.qbx_vehicles:SaveVehicle(vehicle, {
-        state = VehicleState.OUT,
+        state = GarageVehicleState.OUT,
         depotPrice = depotPrice
     })
 end

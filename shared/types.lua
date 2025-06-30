@@ -1,12 +1,12 @@
----@enum VehicleState
-VehicleState = {
+---@enum GarageVehicleState
+GarageVehicleState = {
     OUT = 0,
     GARAGED = 1,
     IMPOUNDED = 2
 }
 
----@enum VehicleType
-VehicleType = {
+---@enum GarageVehicleType
+GarageVehicleType = {
     CAR = 'car',
     AIR = 'air',
     SEA = 'sea',
