@@ -15,7 +15,7 @@ Configurable Markers Denote the pickup and drop off points
 qbx_garages is designed for 3rd party resources to easily replace the built-in UI or interface with the backend. Exports provide functionality to:
 - Register garages at runtime
 - Move vehicles between garages
-- change the depot price of a vehicle
+- change the impound price of a vehicle
 
 ### Access Points
 Garages can now have more than one access point. An access point is a location on the map where vehicles in that garage can be accessed.

@@ -1,27 +1,59 @@
 ---@param vehicleId integer
 ---@param modelName string
 local function setVehicleStateToOut(vehicleId, vehicle, modelName)
-    local depotPrice = Config.calculateImpoundFee(vehicleId, modelName) or 0
+    local impoundPrice = Config.calculateImpoundFee(vehicleId, modelName) or 0
     exports.qbx_vehicles:SaveVehicle(vehicle, {
         state = GarageVehicleState.OUT,
-        depotPrice = depotPrice
+        impoundPrice = impoundPrice
     })
 end
 
 ---@param player table
----@param depotPrice integer
-local function payDepotPrice(player, depotPrice)
+---@param impoundPrice integer
+local function payImpoundPrice(player, impoundPrice)
     local cashBalance = player.PlayerData.money.cash
     local bankBalance = player.PlayerData.money.bank
 
-    if cashBalance >= depotPrice then
-        player.Functions.RemoveMoney('cash', depotPrice, 'paid-depot')
+    if cashBalance >= impoundPrice then
+        player.Functions.RemoveMoney('cash', impoundPrice, 'paid-impound')
         return true
-    elseif bankBalance >= depotPrice then
-        player.Functions.RemoveMoney('bank', depotPrice, 'paid-depot')
+    elseif bankBalance >= impoundPrice then
+        player.Functions.RemoveMoney('bank', impoundPrice, 'paid-impound')
         return true
     end
     return false
+end
+
+---@param spawnPoints table|vector4
+---@return table shuffled array of spawn points
+local function shuffleSpawnPoints(spawnPoints)
+    if type(spawnPoints) == "vector4" then
+        return {spawnPoints}
+    end
+    
+    local shuffled = {}
+    for i = 1, #spawnPoints do
+        shuffled[i] = spawnPoints[i]
+    end
+    
+    for i = #shuffled, 2, -1 do
+        local j = math.random(i)
+        shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
+    end
+    
+    return shuffled
+end
+
+---@param spawnCoords vector4
+---@return boolean true if clear, false if occupied
+local function isSpawnPointClear(spawnCoords)
+    if not Config.distanceCheck then
+        return true
+    end
+    
+    local vec3Coords = vec3(spawnCoords.x, spawnCoords.y, spawnCoords.z)
+    local nearbyVehicle = lib.getClosestVehicle(vec3Coords, Config.distanceCheck, false)
+    return nearbyVehicle == nil
 end
 
 ---@param source number
@@ -38,32 +70,41 @@ lib.callback.register('qbx_garages:server:spawnVehicle', function (source, vehic
     end
     local garageType = GetGarageType(garageName)
 
-    local spawnCoords = accessPoint.spawn or accessPoint.coords
-    if Config.distanceCheck then
-        local vec3Coords = vec3(spawnCoords.x, spawnCoords.y, spawnCoords.z)
-        local nearbyVehicle = lib.getClosestVehicle(vec3Coords, Config.distanceCheck, false)
-        if nearbyVehicle then
-            exports.qbx_core:Notify(source, locale('error.no_space'), 'error')
-            return
+    -- Get spawn points and shuffle them
+    local spawnPoints = accessPoint.spawn or accessPoint.coords
+    local shuffledSpawnPoints = shuffleSpawnPoints(spawnPoints)
+    
+    -- Try to find a clear spawn point
+    local spawnCoords = nil
+    for _, coords in ipairs(shuffledSpawnPoints) do
+        if isSpawnPointClear(coords) then
+            spawnCoords = coords
+            break
         end
+    end
+    
+    -- If no clear spawn point found, notify and return
+    if not spawnCoords then
+        Notify(locale('error.no_space'), 'error')
+        return
     end
 
     local filter = GetPlayerVehicleFilter(source, garageName)
     local playerVehicle = exports.qbx_vehicles:GetPlayerVehicle(vehicleId, filter)
     if not playerVehicle then
-        exports.qbx_core:Notify(source, locale('error.not_owned'), 'error')
+        Notify(locale('error.not_owned'), 'error')
         return
     end
-    if garageType == GarageType.DEPOT and FindPlateOnServer(playerVehicle.props.plate) then -- If depot, check if vehicle is not already spawned on the map
-        return exports.qbx_core:Notify(source, locale('error.not_impound'), 'error', 5000)
+    if garageType == GarageType.IMPOUND and FindPlateOnServer(playerVehicle.props.plate) then -- If impound, check if vehicle is not already spawned on the map
+        return Notify(locale('error.not_impound'), 'error', 5000)
     end
 
-    if garageType == GarageType.DEPOT and playerVehicle.depotPrice and playerVehicle.depotPrice > 0 then
+    if garageType == GarageType.IMPOUND and playerVehicle.impoundPrice and playerVehicle.impoundPrice > 0 then
         local player = exports.qbx_core:GetPlayer(source)
-        local canPay = payDepotPrice(player, playerVehicle.depotPrice)
+        local canPay = payImpoundPrice(player, playerVehicle.impoundPrice)
 
         if not canPay then
-            exports.qbx_core:Notify(source, locale('error.not_enough'), 'error')
+            Notify(locale('error.not_enough'), 'error')
             return
         end
     end
@@ -72,11 +113,7 @@ lib.callback.register('qbx_garages:server:spawnVehicle', function (source, vehic
     local netId, veh = qbx.spawnVehicle({ spawnSource = spawnCoords, model = playerVehicle.props.model, props = playerVehicle.props, warp = warpPed})
 
     if Config.doorsLocked then
-        if GetResourceState('qbx_vehiclekeys') == 'started' then
-            TriggerEvent('qb-vehiclekeys:server:setVehLockState', netId, 2)
-        else
-            SetVehicleDoorsLocked(veh, 2)
-        end
+        TriggerEvent('qb-vehiclekeys:server:setVehLockState', netId, 2)
     end
 
     TriggerClientEvent('vehiclekeys:client:SetOwner', source, playerVehicle.props.plate)

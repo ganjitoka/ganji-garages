@@ -1,25 +1,5 @@
 local config = require 'config.client'
-if not config.enableClient then return end
 local VEHICLES = exports.qbx_core:GetVehiclesByName()
-
----@enum ProgressColor
-local ProgressColor = {
-    GREEN = 'green.5',
-    YELLOW = 'yellow.5',
-    RED = 'red.5'
-}
-
----@param percent number
----@return string
-local function getProgressColor(percent)
-    if percent >= 75 then
-        return ProgressColor.GREEN
-    elseif percent > 25 then
-        return ProgressColor.YELLOW
-    else
-        return ProgressColor.RED
-    end
-end
 
 local VehicleCategory = {
     all = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22},
@@ -56,19 +36,24 @@ local spawnLock = false
 ---@param vehicleId number
 ---@param garageName string
 ---@param accessPoint integer
-local function takeOutOfGarage(vehicleId, garageName, accessPoint)
+---@return boolean success
+function takeOutOfGarage(vehicleId, garageName, accessPoint)
     if spawnLock then
-        exports.qbx_core:Notify(locale('error.spawn_in_progress'))
+        Notify(locale('error.spawn_in_progress'), 'error')
+        return false
     end
     spawnLock = true
     local success, result = pcall(function()
         if cache.vehicle then
-            exports.qbx_core:Notify(locale('error.in_vehicle'))
-            return
+            Notify(locale('error.in_vehicle'), 'error')
+            return false
         end
 
         local netId = lib.callback.await('qbx_garages:server:spawnVehicle', false, vehicleId, garageName, accessPoint)
-        if not netId then return end
+        if not netId then 
+            Notify('Failed to spawn vehicle', 'error')
+            return false
+        end
 
         local veh = lib.waitFor(function()
             if NetworkDoesEntityExistWithNetworkId(netId) then
@@ -77,143 +62,24 @@ local function takeOutOfGarage(vehicleId, garageName, accessPoint)
         end)
 
         if veh == 0 then
-            exports.qbx_core:Notify('Something went wrong spawning the vehicle', 'error')
-            return
+            Notify('Something went wrong spawning the vehicle', 'error')
+            return false
         end
 
         if config.engineOn then
             SetVehicleEngineOn(veh, true, true, false)
         end
+        
+        Notify('Vehicle spawned successfully', 'success')
+        return true
     end)
     spawnLock = false
-    assert(success, result)
-end
-
----@param vehicle PlayerVehicle
----@param garageName string
----@param garageInfo GarageConfig
----@param accessPoint integer
-local function displayVehicleInfo(vehicle, garageName, garageInfo, accessPoint)
-    local engine = qbx.math.round(vehicle.props.engineHealth / 10)
-    local body = qbx.math.round(vehicle.props.bodyHealth / 10)
-    local engineColor = getProgressColor(engine)
-    local bodyColor = getProgressColor(body)
-    local fuelColor = getProgressColor(vehicle.props.fuelLevel)
-    local vehicleLabel = ('%s %s'):format(VEHICLES[vehicle.modelName].brand, VEHICLES[vehicle.modelName].name)
-
-    local options = {
-        {
-            title = locale('menu.information'),
-            icon = 'circle-info',
-            description = locale('menu.description', vehicleLabel, vehicle.props.plate, lib.math.groupdigits(vehicle.depotPrice)),
-            readOnly = true,
-        },
-        {
-            title = locale('menu.body'),
-            icon = 'car-side',
-            readOnly = true,
-            progress = body,
-            colorScheme = bodyColor,
-        },
-        {
-            title = locale('menu.engine'),
-            icon = 'oil-can',
-            readOnly = true,
-            progress = engine,
-            colorScheme = engineColor,
-        },
-        {
-            title = locale('menu.fuel'),
-            icon = 'gas-pump',
-            readOnly = true,
-            progress = vehicle.props.fuelLevel,
-            colorScheme = fuelColor,
-        }
-    }
-
-    if vehicle.state == GarageVehicleState.OUT then
-        if garageInfo.type == GarageType.DEPOT then
-            options[#options + 1] = {
-                title = 'Take out',
-                icon = 'fa-truck-ramp-box',
-                description = ('$%s'):format(lib.math.groupdigits(vehicle.depotPrice)),
-                arrow = true,
-                onSelect = function()
-                    takeOutOfGarage(vehicle.id, garageName, accessPoint)
-                end,
-            }
-        else
-            options[#options + 1] = {
-                title = 'Your vehicle is already out...',
-                icon = GarageVehicleType.CAR,
-                readOnly = true,
-            }
-        end
-    elseif vehicle.state == GarageVehicleState.GARAGED then
-        options[#options + 1] = {
-            title = locale('menu.take_out'),
-            icon = 'car-rear',
-            arrow = true,
-            onSelect = function()
-                takeOutOfGarage(vehicle.id, garageName, accessPoint)
-            end,
-        }
-    elseif vehicle.state == GarageVehicleState.IMPOUNDED then
-        options[#options + 1] = {
-            title = locale('menu.veh_impounded'),
-            icon = 'building-shield',
-            readOnly = true,
-        }
+    
+    if not success then
+        return false
     end
-
-    lib.registerContext({
-        id = 'vehicleList',
-        title = garageInfo.label,
-        menu = 'garageMenu',
-        options = options,
-    })
-
-    lib.showContext('vehicleList')
-end
-
----@param garageName string
----@param garageInfo GarageConfig
----@param accessPoint integer
-local function openGarageMenu(garageName, garageInfo, accessPoint)
-    ---@type PlayerVehicle[]?
-    local vehicleEntities = lib.callback.await('qbx_garages:server:getGarageVehicles', false, garageName)
-
-    if not vehicleEntities then
-        exports.qbx_core:Notify(locale('error.no_vehicles'), 'error')
-        return
-    end
-
-    table.sort(vehicleEntities, function(a, b)
-        return a.modelName < b.modelName
-    end)
-
-    local options = {}
-    for i = 1, #vehicleEntities do
-        local vehicleEntity = vehicleEntities[i]
-        local vehicleLabel = ('%s %s'):format(VEHICLES[vehicleEntity.modelName].brand, VEHICLES[vehicleEntity.modelName].name)
-
-        options[#options + 1] = {
-            title = vehicleLabel,
-            description = vehicleEntity.props.plate,
-            arrow = true,
-            onSelect = function()
-                displayVehicleInfo(vehicleEntity, garageName, garageInfo, accessPoint)
-            end,
-        }
-    end
-
-    lib.registerContext({
-        id = 'garageMenu',
-        title = garageInfo.label,
-        options = options,
-    })
-
-    lib.showContext('garageMenu')
+    
+    return result or false
 end
 
 ---@param vehicle number
@@ -223,7 +89,7 @@ local function parkVehicle(vehicle, garageName)
         local isParkable = lib.callback.await('qbx_garages:server:isParkable', false, garageName, NetworkGetNetworkIdFromEntity(vehicle))
 
         if not isParkable then
-            exports.qbx_core:Notify(locale('error.not_owned'), 'error', 5000)
+            Notify(locale('error.not_owned'), 'error', 5000)
             return
         end
 
@@ -231,9 +97,9 @@ local function parkVehicle(vehicle, garageName)
         SetVehicleDoorsLocked(vehicle, 2)
         Wait(1500)
         lib.callback.await('qbx_garages:server:parkVehicle', false, NetworkGetNetworkIdFromEntity(vehicle), lib.getVehicleProperties(vehicle), garageName)
-        exports.qbx_core:Notify(locale('success.vehicle_parked'), 'primary', 4500)
+        Notify(locale('success.vehicle_parked'), 'success', 4500)
     else
-        exports.qbx_core:Notify(locale('error.vehicle_occupied'), 'error', 3500)
+        Notify(locale('error.vehicle_occupied'), 'error', 3500)
     end
 end
 
@@ -241,11 +107,11 @@ end
 ---@return boolean
 local function checkCanAccess(garage)
     if garage.groups and not exports.qbx_core:HasPrimaryGroup(garage.groups, QBX.PlayerData) then
-        exports.qbx_core:Notify(locale('error.no_access'), 'error')
+        Notify(locale('error.no_access'), 'error')
         return false
     end
     if cache.vehicle and not isOfType(garage.garageVehicleType, cache.vehicle) then
-        exports.qbx_core:Notify(locale('error.not_correct_type'), 'error')
+        Notify(locale('error.not_correct_type'), 'error')
         return false
     end
     return true
@@ -257,39 +123,49 @@ end
 ---@param accessPointIndex integer
 local function createZones(garageName, garage, accessPoint, accessPointIndex)
     CreateThread(function()
-        accessPoint.dropPoint = accessPoint.dropPoint or accessPoint.spawn
-        local dropZone, coordsZone
+        local dropPoints = accessPoint.dropPoint or accessPoint.spawn
+        local dropPointsArray = {}
+        if dropPoints and type(dropPoints) == "vector4" then
+            dropPointsArray = {dropPoints}
+        elseif dropPoints and type(dropPoints) == "table" and #dropPoints > 0 then
+            dropPointsArray = dropPoints
+        end
+
+        local dropZones = {}
+        local coordsZone
         lib.zones.sphere({
             coords = accessPoint.coords,
-            radius = 15,
+            radius = 45,
             onEnter = function()
-                if accessPoint.dropPoint and garage.type ~= GarageType.DEPOT then
-                    dropZone = lib.zones.sphere({
-                        coords = accessPoint.dropPoint,
-                        radius = 1.5,
-                        onEnter = function()
-                            if not cache.vehicle then return end
-                            lib.showTextUI(locale('info.park_e') or "")
-                        end,
-                        onExit = function()
-                            lib.hideTextUI()
-                        end,
-                        inside = function()
-                            if not cache.vehicle then return end
-                            if IsControlJustReleased(0, 38) then
-                                if not checkCanAccess(garage) then return end
-                                parkVehicle(cache.vehicle, garageName)
-                            end
-                        end,
-                        debug = config.debugPoly
-                    })
+                if dropPointsArray and #dropPointsArray > 0 and garage.type ~= GarageType.IMPOUND then
+                    for i=1,#dropPointsArray do
+                        dropZones[i] = lib.zones.sphere({
+                            coords = vec3(dropPointsArray[i].x, dropPointsArray[i].y, dropPointsArray[i].z),
+                            radius = 2.5,
+                            onEnter = function()
+                                if not cache.vehicle then return end
+                                lib.showTextUI(locale('info.park_e') or "")
+                            end,
+                            onExit = function()
+                                lib.hideTextUI()
+                            end,
+                            inside = function()
+                                if not cache.vehicle then return end
+                                if IsControlJustReleased(0, 38) then
+                                    if not checkCanAccess(garage) then return end
+                                    parkVehicle(cache.vehicle, garageName)
+                                end
+                            end,
+                            debug = config.debugPoly
+                        })
+                    end
                 end
                 coordsZone = lib.zones.sphere({
                     coords = accessPoint.coords,
-                    radius = 1,
+                    radius = 2.5,
                     onEnter = function()
                         if accessPoint.dropPoint and cache.vehicle then return end
-                        lib.showTextUI((garage.type == GarageType.DEPOT and (locale('info.impound_e') or "")) or (cache.vehicle and (locale('info.park_e') or "")) or (locale('info.car_e') or ""))
+                        lib.showTextUI((garage.type == GarageType.IMPOUND and (locale('info.impound_e') or "")) or (cache.vehicle and (locale('info.park_e') or "")) or (locale('info.car_e') or ""))
                     end,
                     onExit = function()
                         lib.hideTextUI()
@@ -298,10 +174,10 @@ local function createZones(garageName, garage, accessPoint, accessPointIndex)
                         if accessPoint.dropPoint and cache.vehicle then return end
                         if IsControlJustReleased(0, 38) then
                             if not checkCanAccess(garage) then return end
-                            if cache.vehicle and garage.type ~= GarageType.DEPOT then
+                            if cache.vehicle and garage.type ~= GarageType.IMPOUND then
                                 parkVehicle(cache.vehicle, garageName)
-                            else
-                                openGarageMenu(garageName, garage, accessPointIndex)
+                            elseif not cache.vehicle then
+                                OpenReactGarageUI(garageName, garage, accessPointIndex)
                             end
                         end
                     end,
@@ -309,27 +185,36 @@ local function createZones(garageName, garage, accessPoint, accessPointIndex)
                 })
             end,
             onExit = function()
-                if dropZone then
-                    dropZone:remove()
+                if dropZones then
+                    for _, zone in ipairs(dropZones) do
+                        zone:remove()
+                    end
                 end
                 if coordsZone then
                     coordsZone:remove()
                 end
             end,
             inside = function()
-                if accessPoint.dropPoint then
-                    config.drawDropOffMarker(accessPoint.dropPoint)
+                if cache.vehicle then
+                    if accessPoint.dropPoint then
+                        config.drawDropOffMarker(accessPoint.dropPoint, garage.garageVehicleType)
+                    end
+                    if dropPointsArray and #dropPointsArray > 0 and garage.type ~= GarageType.IMPOUND then
+                        for i=1,#dropPointsArray do
+                            config.drawDropOffMarker(vec3(dropPointsArray[i].x, dropPointsArray[i].y, dropPointsArray[i].z), garage.garageVehicleType)
+                        end
+                    end
                 end
-                config.drawGarageMarker(accessPoint.coords.xyz)
+                config.drawGarageMarker(accessPoint.coords.xyz, garage.garageVehicleType)
             end,
             debug = config.debugPoly,
         })
     end)
 end
 
----@param garageInfo GarageConfig
+---@param garageName string
 ---@param accessPoint AccessPoint
-local function createBlips(garageInfo, accessPoint)
+local function createBlips(garageName, accessPoint)
     local blip = AddBlipForCoord(accessPoint.coords.x, accessPoint.coords.y, accessPoint.coords.z)
     SetBlipSprite(blip, accessPoint.blip.sprite or 357)
     SetBlipDisplay(blip, 4)
@@ -337,7 +222,7 @@ local function createBlips(garageInfo, accessPoint)
     SetBlipAsShortRange(blip, true)
     SetBlipColour(blip, accessPoint.blip.color or 3)
     BeginTextCommandSetBlipName('STRING')
-    AddTextComponentSubstringPlayerName(accessPoint.blip.name or garageInfo.label)
+    AddTextComponentSubstringPlayerName(accessPoint.blip.name or garageName)
     EndTextCommandSetBlipName(blip)
 end
 
@@ -347,7 +232,7 @@ local function createGarage(name, garage)
         local accessPoint = accessPoints[i]
 
         if accessPoint.blip then
-            createBlips(garage, accessPoint)
+            createBlips(name, accessPoint)
         end
 
         createZones(name, garage, accessPoint, i)
@@ -363,6 +248,41 @@ end
 
 RegisterNetEvent('qbx_garages:client:garageRegistered', function(name, garage)
     createGarage(name, garage)
+end)
+
+-- Vehicle fade effect function
+local function fadeVehicle(vehicle, duration)
+    local startTime = GetGameTimer()
+    local endTime = startTime + duration
+    
+    CreateThread(function()
+        while GetGameTimer() < endTime do
+            local currentTime = GetGameTimer()
+            local progress = (currentTime - startTime) / duration
+            local alpha = math.floor(255 * (1 - progress))
+            
+            if DoesEntityExist(vehicle) then
+                SetEntityAlpha(vehicle, alpha, false)
+            else
+                break
+            end
+            
+            Wait(16) -- ~60 FPS
+        end
+        
+        -- Ensure vehicle is fully transparent at the end
+        if DoesEntityExist(vehicle) then
+            SetEntityAlpha(vehicle, 0, false)
+        end
+    end)
+end
+
+-- Event handler for vehicle fade
+RegisterNetEvent('qbx_garages:client:fadeVehicle', function(netId)
+    local vehicle = NetworkGetEntityFromNetworkId(netId)
+    if vehicle and DoesEntityExist(vehicle) then
+        fadeVehicle(vehicle, 2000) -- 2 second fade
+    end
 end)
 
 CreateThread(function()

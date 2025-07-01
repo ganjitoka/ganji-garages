@@ -16,11 +16,11 @@ local function setVehicleGarage(vehicleId, garageName, state)
 end
 
 ---@param vehicleId integer
----@param depotPrice integer
+---@param impoundPrice integer
 ---@return integer numRowsAffected
-local function setVehicleDepotPrice(vehicleId, depotPrice)
-    return MySQL.update('UPDATE player_vehicles SET depotPrice = ? WHERE id = ? AND state != ?', {
-        depotPrice,
+local function setVehicleImpoundPrice(vehicleId, impoundPrice)
+    return MySQL.update('UPDATE player_vehicles SET impoundPrice = ? WHERE id = ? AND state != ?', {
+        impoundPrice,
         vehicleId,
         GarageVehicleState.GARAGED
     })
@@ -29,5 +29,5 @@ end
 return {
     moveOutVehiclesIntoGarages = moveOutVehiclesIntoGarages,
     setVehicleGarage = setVehicleGarage,
-    setVehicleDepotPrice = setVehicleDepotPrice,
+    setVehicleImpoundPrice = setVehicleImpoundPrice,
 }

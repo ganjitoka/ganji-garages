@@ -1,17 +1,36 @@
 return {
-    enableClient = true, -- disable to create your own client interface
-    engineOn = true, -- If true, the engine will be on upon taking the vehicle out.
+    engineOn = false, -- If true, the engine will be on upon taking the vehicle out.
     debugPoly = false,
 
     --- called every frame when player is near the garage and there is a separate drop off marker
     ---@param coords vector3
-    drawDropOffMarker = function(coords)
-        DrawMarker(0, coords.x, coords.y, coords.z - 2.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0, 3.0, 3.0, 242, 0, 48, 255, false, false, 0, false, "", "", false)
+    ---@param type GarageVehicleType
+    drawDropOffMarker = function(coords, type)
+        local markerType = 0
+        if type == GarageVehicleType.CAR then
+            markerType = 36
+        elseif type == GarageVehicleType.AIR then
+            markerType = 34
+        elseif type == GarageVehicleType.SEA then
+            markerType = 35
+        end
+---@diagnostic disable-next-line: param-type-mismatch
+        DrawMarker(markerType, coords.x, coords.y, coords.z, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 242, 0, 48, 255, true, true, 2, false, nil, nil, false)
     end,
 
     --- called every frame when player is near the garage to draw the garage marker
     ---@param coords vector3
-    drawGarageMarker = function(coords)
-        DrawMarker(0, coords.x, coords.y, coords.z - 2.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 2.0, 2.0, 20, 246, 12, 255, false, false, 0, false, "", "", false)
+    ---@param type GarageVehicleType
+    drawGarageMarker = function(coords, type)
+        local markerType = 0
+        if type == GarageVehicleType.CAR then
+            markerType = 36
+        elseif type == GarageVehicleType.AIR then
+            markerType = 34
+        elseif type == GarageVehicleType.SEA then
+            markerType = 35
+        end
+---@diagnostic disable-next-line: param-type-mismatch
+        DrawMarker(markerType, coords.x, coords.y, coords.z, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 20, 246, 12, 255, true, true, 2, false, nil, nil, false)
     end,
 }

@@ -1,0 +1,37 @@
+{
+  "vehicleImageUrl": "https://urbanitesrp.com/images/vehicles/{vehicleModel}.png",
+  "theme": {
+    "defaultMode": "dark",
+    "colors": {
+      "light": {
+        "primary": "#5fbc60",
+        "secondary": "#004a00"
+      },
+      "dark": {
+        "primary": "#004a00",
+        "secondary": "#5fbc60"
+      }
+    }
+  },
+  "layout": {
+    "width": "50vw",
+    "minHeight": "50vh",
+    "maxHeight": "80vh",
+    "vehicleCard": {
+      "thumbnailSize": {
+        "collapsed": {
+          "width": "4rem",
+          "height": "3rem"
+        },
+        "expanded": {
+          "width": "8rem",
+          "height": "6rem"
+        }
+      }
+    }
+  },
+  "animations": {
+    "transitionDuration": "0.3s",
+    "hoverTransform": "translateY(-0.125rem)"
+  }
+}

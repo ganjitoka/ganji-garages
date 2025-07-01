@@ -2,19 +2,6 @@ assert(lib.checkDependency('qbx_core', '1.19.0', true))
 assert(lib.checkDependency('qbx_vehicles', '1.3.1', true))
 lib.versionCheck('Qbox-project/qbx_garages')
 
----@class GarageErrorResult
----@field code string
----@field message string
-
----@class GaragePlayerVehicle
----@field id number
----@field citizenid? string
----@field modelName string
----@field garage string
----@field state GarageVehicleState
----@field depotPrice integer
----@field props table ox_lib properties table
-
 Config = require 'config.server'
 VEHICLES = exports.qbx_core:GetVehiclesByName()
 Storage = require 'server.storage'
@@ -55,7 +42,7 @@ local function setVehicleGarage(vehicleId, garageName)
         }
     end
 
-    local state = garage.type == GarageType.DEPOT and GarageVehicleState.IMPOUNDED or GarageVehicleState.GARAGED
+    local state = garage.type == GarageType.IMPOUND and GarageVehicleState.IMPOUNDED or GarageVehicleState.GARAGED
     local numRowsAffected = Storage.setVehicleGarage(vehicleId, garageName, state)
     if numRowsAffected == 0 then
         return false, {
@@ -68,12 +55,12 @@ end
 
 exports('SetVehicleGarage', setVehicleGarage)
 
----Sets the vehicle's price for retrieval at a depot. Only affects vehicles that are OUT or IMPOUNDED.
+---Sets the vehicle's price for retrieval at an impound. Only affects vehicles that are OUT or IMPOUNDED.
 ---@param vehicleId integer
----@param depotPrice integer
+---@param impoundPrice integer
 ---@return boolean success, ErrorResult?
-local function setVehicleDepotPrice(vehicleId, depotPrice)
-    local numRowsAffected = Storage.setVehicleDepotPrice(vehicleId, depotPrice)
+local function setVehicleImpoundPrice(vehicleId, impoundPrice)
+    local numRowsAffected = Storage.setVehicleImpoundPrice(vehicleId, impoundPrice)
     if numRowsAffected == 0 then
         return false, {
             code = 'no_rows_changed',
@@ -83,7 +70,7 @@ local function setVehicleDepotPrice(vehicleId, depotPrice)
     return true
 end
 
-exports('SetVehicleDepotPrice', setVehicleDepotPrice)
+exports('SetVehicleImpoundPrice', setVehicleImpoundPrice)
 
 function FindPlateOnServer(plate)
     local vehicles = GetAllVehicles()
@@ -99,11 +86,6 @@ end
 function GetGarageType(garage)
     return Garages[garage]?.type
 end
-
----@class GaragePlayerVehiclesFilters
----@field citizenid? string
----@field states? GarageVehicleState|GarageVehicleState[]
----@field garage? string
 
 ---@param source number
 ---@param garageName string
@@ -128,7 +110,7 @@ local function getCanAccessGarage(player, garage)
     return true
 end
 
----@param playerVehicle PlayerVehicle
+---@param playerVehicle GaragePlayerVehicle
 ---@return GarageVehicleType
 local function getVehicleType(playerVehicle)
     if VEHICLES[playerVehicle.modelName].category == 'helicopters' or VEHICLES[playerVehicle.modelName].category == 'planes' then
@@ -142,7 +124,7 @@ end
 
 ---@param source number
 ---@param garageName string
----@return PlayerVehicle[]?
+---@return GaragePlayerVehicle[]?
 lib.callback.register('qbx_garages:server:getGarageVehicles', function(source, garageName)
     local player = exports.qbx_core:GetPlayer(source)
     local garage = Garages[garageName]
@@ -150,7 +132,7 @@ lib.callback.register('qbx_garages:server:getGarageVehicles', function(source, g
     local filter = GetPlayerVehicleFilter(source, garageName)
     local playerVehicles = exports.qbx_vehicles:GetPlayerVehicles(filter)
     local toSend = {}
-    if not playerVehicles[1] then return end
+    if not playerVehicles[1] then return toSend end -- Return empty table instead of nil
     for _, vehicle in pairs(playerVehicles) do
         if not FindPlateOnServer(vehicle.props.plate) then
             local vehicleType = Garages[garageName].garageVehicleType
@@ -168,15 +150,15 @@ end)
 ---@return boolean
 local function isParkable(source, vehicleId, garageName)
     local garageType = GetGarageType(garageName)
-    --- DEPOTS are only for retrieving, not storing
-    if garageType == GarageType.DEPOT then return false end
+    --- IMPOUNDS are only for retrieving, not storing
+    if garageType == GarageType.IMPOUND then return false end
     if not vehicleId then return false end
     local player = exports.qbx_core:GetPlayer(source)
     local garage = Garages[garageName]
     if not getCanAccessGarage(player, garage) then
         return false
     end
-    ---@type PlayerVehicle
+    ---@type GaragePlayerVehicle
     local playerVehicle = exports.qbx_vehicles:GetPlayerVehicle(vehicleId)
     if getVehicleType(playerVehicle) ~= garage.garageVehicleType then
         return false
@@ -205,7 +187,7 @@ lib.callback.register('qbx_garages:server:parkVehicle', function(source, netId, 
     local vehicleId = Entity(vehicle).state.vehicleid or exports.qbx_vehicles:GetVehicleIdByPlate(GetVehicleNumberPlateText(vehicle))
     local owned = isParkable(source, vehicleId, garage) --Check ownership
     if not owned then
-        exports.qbx_core:Notify(source, locale('error.not_owned'), 'error')
+        Notify(locale('error.not_owned'), 'error')
         return
     end
 
@@ -215,7 +197,13 @@ lib.callback.register('qbx_garages:server:parkVehicle', function(source, netId, 
         props = props
     })
 
-    exports.qbx_core:DeleteVehicle(vehicle)
+    -- Trigger client-side fade effect before deletion
+    TriggerClientEvent('qbx_garages:client:fadeVehicle', -1, netId)
+    
+    -- Delete vehicle after fade duration
+    SetTimeout(2000, function()
+        exports.qbx_core:DeleteVehicle(vehicle)
+    end)
 end)
 
 AddEventHandler('onResourceStart', function(resource)

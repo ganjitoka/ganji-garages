@@ -6,6 +6,8 @@ description 'Garage system for Qbox'
 repository 'https://github.com/Qbox-project/qbx_garages'
 version '1.1.4'
 
+ui_page 'ui/dist/index.html'
+
 ox_lib 'locale'
 
 shared_scripts {
@@ -17,6 +19,7 @@ shared_scripts {
 client_scripts {
     '@qbx_core/modules/playerdata.lua',
     'client/main.lua',
+    'client/ui.lua',
 }
 
 server_scripts {
@@ -28,6 +31,7 @@ server_scripts {
 files {
     'config/client.lua',
     'locales/*.json',
+    'ui/dist/**/*',
 }
 
 lua54 'yes'
